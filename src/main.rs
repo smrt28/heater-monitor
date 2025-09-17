@@ -11,6 +11,7 @@ use crate::config::Config;
 use anyhow::Result;
 use log::error;
 use regex::Regex;
+use crate::server::run_server;
 use crate::temp_sensor::TempSensor;
 use crate::storage::Storage;
 
@@ -43,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::read(get_config_path()?)?;
 
     let storage = Arc::new(Mutex::new(Storage::new()));
-        
+
     {
         let temp_sensor = TempSensor::new(&config.temp_sensor_url);
         let interval = config.interval;
@@ -62,9 +63,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 tokio::time::sleep(std::time::Duration::from_secs(interval as u64)).await;
             }
         });
-        handle.await?;
     }
-    
 
+    let res = run_server(storage, &config).await?;
     Ok(())
 }

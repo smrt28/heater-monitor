@@ -3,12 +3,15 @@ use axum::Json;
 use axum::response::{IntoResponse, Response};
 use log::{info};
 use uuid::Uuid;
-
+use crate::storage::Storage;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
     #[error(transparent)]
     Any(#[from] anyhow::Error),
+
+    #[error("time error: {0}")]
+    TimeError(#[from] std::time::SystemTimeError),
 
     #[error("internal server error: {0}")]
     JsonError(#[from] serde_json::Error),
@@ -30,6 +33,9 @@ pub enum AppError {
 
     #[error("regex error: {0}")]
     RegexError(#[from] regex::Error),
+
+    #[error("internal error: {0}")]
+    InternalError(String),
 }
 
 impl IntoResponse for AppError {
@@ -48,6 +54,8 @@ impl IntoResponse for AppError {
             AppError::IOError(_)          => (StatusCode::INTERNAL_SERVER_ERROR,   7),
             AppError::RegexError(_)       => (StatusCode::INTERNAL_SERVER_ERROR,   8),
             AppError::TemperatureSensorError(_)       => (StatusCode::INTERNAL_SERVER_ERROR,   9),
+            AppError::InternalError(_)   => (StatusCode::INTERNAL_SERVER_ERROR, 10),
+            AppError::TimeError(_)       => (StatusCode::INTERNAL_SERVER_ERROR, 11),
 
         };
 
@@ -57,5 +65,11 @@ impl IntoResponse for AppError {
             "uuid": uuid.to_string(),
         });
         (http_status, Json(body)).into_response()
+    }
+}
+
+impl<T> From<std::sync::PoisonError<T>> for AppError {
+    fn from(_: std::sync::PoisonError<T>) -> Self {
+        AppError::InternalError("Mutex lock was poisoned".into())
     }
 }
