@@ -1,5 +1,6 @@
 use std::time::{Duration, SystemTime};
 use std::collections::VecDeque;
+use crate::config::Config;
 
 #[derive(Debug, Clone)]
 pub struct Sample {
@@ -22,10 +23,10 @@ pub enum StorageError {
 }
 
 impl Storage {
-    pub fn new() -> Self {
+    pub fn new(config: &Config) -> Self {
         Self {
             samples: VecDeque::new(),
-            max_capacity: None,
+            max_capacity: Some(config.max_capacity),
         }
     }
 

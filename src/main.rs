@@ -14,6 +14,7 @@ use log::error;
 use crate::server::run_server;
 use crate::temp_sensor::TempSensor;
 use crate::storage::Storage;
+use std::env;
 
 fn get_config_path() -> Result<PathBuf> {
     #[cfg(not(debug_assertions))]
@@ -43,7 +44,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Config::read(get_config_path()?)?;
 
-    let storage = Arc::new(Mutex::new(Storage::new()));
+    let storage = Arc::new(Mutex::new(
+        Storage::new(&config)
+    ));
 
     {
         let temp_sensor = TempSensor::new(&config.temp_sensor_url);
