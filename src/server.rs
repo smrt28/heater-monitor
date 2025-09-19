@@ -40,7 +40,7 @@ pub async fn run_server(
     let app = Router::new()
         .route("/", get(index))
         .route("/temps", get(temps))
-        .route("/assets/*file", get(serve_asset))
+        .route("/assets/{*file}", get(serve_asset))
         .fallback(get(fallback))
         .with_state(state);
 

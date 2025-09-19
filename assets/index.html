@@ -107,6 +107,8 @@
                 <button class="time-btn" data-hours="1">Last Hour</button>
                 <button class="time-btn active" data-hours="3">Last 3 Hours</button>
                 <button class="time-btn" data-hours="5">Last 5 Hours</button>
+                <button class="time-btn" data-hours="12">Last 12 Hours</button>
+                <button class="time-btn" data-hours="24">Last 24 Hours</button>
             </div>
             <button class="refresh-btn" onclick="refreshData()">🔄 Refresh</button>
         </div>
@@ -322,7 +324,7 @@
             const urlParams = new URLSearchParams(window.location.search);
             const hours = urlParams.get('hours');
             
-            if (hours && ['1', '3', '5'].includes(hours)) {
+            if (hours && ['1', '3', '5', '12', '24'].includes(hours)) {
                 currentHours = parseInt(hours);
                 
                 // Update active button
@@ -343,9 +345,6 @@
             
             // Load initial data
             await refreshData();
-            
-            // Auto-refresh every 30 seconds
-            setInterval(refreshData, 30000);
         });
     </script>
 </body>

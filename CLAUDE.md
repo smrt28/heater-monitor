@@ -48,9 +48,9 @@ Serves the main web interface - an interactive temperature monitoring dashboard.
 
 **Features:**
 - **Real-time Chart**: Line graph showing temperature over time using Chart.js
-- **Time Range Controls**: Buttons for 1, 3, and 5-hour views  
-- **Auto-refresh**: Updates chart every 30 seconds automatically
-- **URL Parameters**: Supports `?hours=X` query parameter (1, 3, or 5)
+- **Time Range Controls**: Buttons for 1, 3, 5, 12, and 24-hour views  
+- **Manual Refresh**: On-demand data updates with refresh button
+- **URL Parameters**: Supports `?hours=X` query parameter (1, 3, 5, 12, or 24)
 - **Responsive Design**: Clean, modern interface that works on all devices
 - **Gap Handling**: Displays null values as gaps in the chart for sensor outages
 - **Loading States**: Shows loading and error messages appropriately
@@ -60,7 +60,7 @@ Serves the main web interface - an interactive temperature monitoring dashboard.
 - Local Chart.js adapter served from `/assets/` route for offline operation
 - Only main Chart.js library loaded from CDN (could be localized if needed)
 
-##### GET `/assets/*file`
+##### GET `/assets/{*file}`
 
 Serves static assets embedded in the binary for offline operation.
 
@@ -141,6 +141,8 @@ http://localhost:8080/
 # Open with specific time range
 http://localhost:8080/?hours=1
 http://localhost:8080/?hours=5
+http://localhost:8080/?hours=12
+http://localhost:8080/?hours=24
 ```
 
 #### HTTP API Usage
