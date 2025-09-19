@@ -33,20 +33,7 @@ struct Args {
 
 
 
-async fn run_app(args: Args) -> Result<(), Box<dyn std::error::Error>> {
-
-    #[cfg(debug_assertions)]
-    let config_path = args.config_path.unwrap_or_else(|| {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("assets")
-            .join("config.toml")
-    });
-
-    #[cfg(not(debug_assertions))]
-    let config_path = args.config_path;
-
-    let config = Config::read(config_path.clone())?;
-    info!("Loaded config from: {}", config_path.display());
+async fn run_app(config: Config) -> Result<(), Box<dyn std::error::Error>> {
 
     let storage = Arc::new(Mutex::new(
         Storage::new(&config)
@@ -90,6 +77,19 @@ async fn run_app(args: Args) -> Result<(), Box<dyn std::error::Error>> {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
+    // Load config first to get log path
+    #[cfg(debug_assertions)]
+    let config_path = args.config_path.clone().unwrap_or_else(|| {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("assets")
+            .join("config.toml")
+    });
+
+    #[cfg(not(debug_assertions))]
+    let config_path = args.config_path.clone();
+
+    let config = Config::read(config_path)?;
+
     // In debug mode, force foreground operation
     #[cfg(debug_assertions)]
     let daemon_mode = false;
@@ -102,7 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let log_file = OpenOptions::new()
             .create(true)
             .append(true)
-            .open("/tmp/heater-monitor.log")?;
+            .open(&config.log_path)?;
 
         env_logger::Builder::from_default_env()
             .filter_level(log::LevelFilter::Info)
@@ -134,5 +134,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let rt = tokio::runtime::Runtime::new()?;
-    rt.block_on(run_app(args))
+    rt.block_on(run_app(config))
 }

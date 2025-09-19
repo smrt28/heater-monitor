@@ -11,6 +11,7 @@ pub struct Config {
     pub interval: u64,
     pub port: u16,
     pub listen_address: String,
+    pub log_path: String,
 }
 
 impl Config {
