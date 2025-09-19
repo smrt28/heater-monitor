@@ -1,11 +1,13 @@
 
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime};
 use crate::config::Config;
 use crate::app_error::AppError;
-use crate::storage::{Sample, SampleSpec, Storage};
+use crate::storage::{Sample, Storage, StorageError};
 use anyhow::Context;
+use serde::{Deserialize, Serialize};
 
-use axum::{routing::{get}, extract::{State}, Router, Json};
+use axum::{routing::{get}, extract::{State, Query}, Router, Json};
 use axum::serve;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -13,6 +15,19 @@ use tokio::net::TcpListener;
 #[derive(Clone)]
 struct AppState {
     storage: Arc<Mutex<Storage>>,
+}
+
+#[derive(Deserialize)]
+struct TempsQuery {
+    hours: Option<u64>,
+}
+
+#[derive(Serialize)]
+struct TempsResponse {
+    temperatures: Vec<f64>,
+    latest_time: u64,
+    interval_minutes: u64,
+    count: usize,
 }
 
 pub async fn run_server(
@@ -36,10 +51,32 @@ pub async fn run_server(
 
 
 
-async fn temps(State(state): State<AppState>) -> Result<Json<Sample>, AppError> {
-    Ok(axum::Json(state.storage.lock()?
-        .sample(SampleSpec::Time(std::time::Duration::from_secs(3600)))))
-
+async fn temps(
+    State(state): State<AppState>,
+    Query(params): Query<TempsQuery>
+) -> Result<Json<TempsResponse>, AppError> {
+    let hours = params.hours.unwrap_or(3);
+    let now = SystemTime::now();
+    let from = now - Duration::from_secs(hours * 3600);
+    
+    let storage = state.storage.lock()?;
+    let temperatures = storage.per_minute_avg_fill(from, now)
+        .map_err(|e| match e {
+            StorageError::InvalidTimeRange => AppError::InternalError("Invalid time range".to_string()),
+            StorageError::NoDataAvailable => AppError::InternalError("No data available for the requested time range".to_string()),
+        })?;
+    
+    let response = TempsResponse {
+        count: temperatures.len(),
+        latest_time: now
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+        interval_minutes: 1,
+        temperatures,
+    };
+    
+    Ok(Json(response))
 }
 
 async fn fallback() -> &'static str {

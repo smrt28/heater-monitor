@@ -1,197 +1,143 @@
-use std::arch::x86_64::_mulx_u32;
-use std::cmp::PartialEq;
-use std::collections::VecDeque;
 use std::time::{Duration, SystemTime};
-use serde::Serialize;
-use uuid::Timestamp;
-use crate::app_error::AppError;
+use std::collections::VecDeque;
 
-#[derive(Debug, PartialEq)]
-enum Status {
-    Ok,
-    Error,
-}
-
-struct Measurement {
-    temp: Option<f64>,
-    hum: Option<f64>,
-    timestamp: SystemTime,
-    status: Status,
-}
-
-pub struct Storage {
-    measurements: VecDeque<Measurement>,
-    max_measurements: usize,
-}
-
-
-pub enum SampleSpec {
-    Time(std::time::Duration),
-}
-
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone)]
 pub struct Sample {
-     temp: Vec<f64>,
+    pub timestamp: SystemTime,
+    pub temperature: f64,
+    pub humidity: f64,
 }
 
-impl Sample {
-    pub fn create_empty() -> Self {
-        Self {
-            temp: Vec::new(),
-        }
-    }
+#[derive(Debug)]
+pub struct Storage {
+    samples: VecDeque<Sample>,
+    max_capacity: Option<usize>,
+}
+
+#[derive(Debug)]
+pub enum StorageError {
+    InvalidTimeRange,
+    NoDataAvailable,
 }
 
 impl Storage {
     pub fn new() -> Self {
         Self {
-            measurements: VecDeque::new(),
-            max_measurements: 100000,
+            samples: VecDeque::new(),
+            max_capacity: None,
         }
     }
 
-    pub fn set_max_measurements(&mut self, max_measurements: usize) {
-        self.max_measurements = max_measurements;
+    pub fn with_capacity(max_capacity: usize) -> Self {
+        Self {
+            samples: VecDeque::with_capacity(max_capacity),
+            max_capacity: Some(max_capacity),
+        }
     }
 
     pub fn add_measurement(&mut self, temp: f64, hum: f64) {
-        self.measurements.push_front(Measurement{
-            temp: Some(temp),
-            hum: Some(hum),
+        let sample = Sample {
             timestamp: SystemTime::now(),
-            status: Status::Ok,
-        });
+            temperature: temp,
+            humidity: hum,
+        };
+
+        if let Some(capacity) = self.max_capacity {
+            if self.samples.len() >= capacity {
+                self.samples.pop_front();
+            }
+        }
+
+        self.samples.push_back(sample);
     }
 
-    pub fn per_minute_avg_fill2(&self, from: SystemTime, to: SystemTime) -> Vec<f64> {
-        if to <= from {
-            return Vec::new();
+    pub fn get_samples_in_range(&self, from: SystemTime, to: SystemTime) -> Result<Vec<&Sample>, StorageError> {
+        if from > to {
+            return Err(StorageError::InvalidTimeRange);
         }
 
-        let mut result = Vec::new();
-        let mut index = 0;
+        let samples: Vec<&Sample> = self.samples
+            .iter()
+            .filter(|sample| sample.timestamp >= from && sample.timestamp <= to)
+            .collect();
 
-        // Find first measurement at/after `from`
-        while index < self.measurements.len() && self.measurements[index].timestamp < from {
-            index += 1;
+        if samples.is_empty() {
+            return Err(StorageError::NoDataAvailable);
         }
 
-        let mut minute_start = from;
-        let mut minute_end = minute_start + Duration::from_secs(60);
+        Ok(samples)
+    }
 
-        while minute_start < to {
-            let mut sum = 0.0;
-            let mut count = 0usize;
+    pub fn per_minute_avg_fill(&self, from: SystemTime, to: SystemTime) -> Result<Vec<f64>, StorageError> {
+        if from > to {
+            return Err(StorageError::InvalidTimeRange);
+        }
 
-            // Consume all measurements in this minute
-            while index < self.measurements.len()
-                && self.measurements[index].timestamp < minute_end
-            {
-                let m = &self.measurements[index];
-                if m.status == Status::Ok {
-                    if let Some(v) = m.temp {
-                        sum += v;
-                        count += 1;
-                    }
-                }
-                index += 1;
-            }
-
-            // Average or forward-fill
-            if count > 0 {
-                result.push(sum / count as f64);
+        let samples = self.get_samples_in_range(from, to)?;
+        let mut averages = Vec::new();
+        
+        let duration_secs = to.duration_since(from)
+            .map_err(|_| StorageError::InvalidTimeRange)?
+            .as_secs();
+        
+        let minutes = (duration_secs / 60) + 1;
+        
+        for minute in 0..minutes {
+            let minute_start = from + Duration::from_secs(minute * 60);
+            let minute_end = minute_start + Duration::from_secs(60);
+            
+            let minute_samples: Vec<&Sample> = samples
+                .iter()
+                .filter(|sample| sample.timestamp >= minute_start && sample.timestamp < minute_end)
+                .cloned()
+                .collect();
+            
+            if !minute_samples.is_empty() {
+                let avg = minute_samples
+                    .iter()
+                    .map(|s| s.temperature)
+                    .sum::<f64>() / minute_samples.len() as f64;
+                averages.push(avg);
             } else {
-                let prev = result.last().copied().unwrap_or(f64::NAN);
-                result.push(prev);
-            }
-
-            // If no more data, fill remaining minutes with last value and bail
-            if index >= self.measurements.len() {
-                let last = *result.last().unwrap(); // safe: we just pushed
-                let mut ms = minute_end;
-                while ms < to {
-                    result.push(last);
-                    ms += Duration::from_secs(60);
-                }
-                break;
-            }
-
-            minute_start = minute_end;
-            minute_end += Duration::from_secs(60);
-        }
-
-        result
-    }
-
-    pub fn per_minute_avg_fill(&self, from: SystemTime, to: SystemTime) -> Result<Vec<f64>, AppError> {
-        assert!(to >= from, "invalid range");
-        let total_secs = to.duration_since(from)?.as_secs();
-        let buckets = ((total_secs + 59) / 60) as usize; // ceil to full minutes
-        if buckets == 0 {
-            return Ok(Vec::new());
-        }
-
-        let mut sums = vec![0.0f64; buckets];
-        let mut counts = vec![0usize; buckets];
-
-        // Fill sums/counts (early-exit thanks to sorted data)
-        for m in self.measurements.iter() {
-            if m.timestamp >= to {
-                break;
-            }
-            if m.timestamp < from {
-                continue;
-            }
-            if m.status != Status::Ok {
-                continue;
-            }
-            if let Some(v) = m.temp {
-                let idx = (m.timestamp.duration_since(from)?.as_secs() / 60) as usize;
-                if idx < buckets {
-                    sums[idx] += v;
-                    counts[idx] += 1;
+                // Use interpolation or previous value for missing data points
+                if let Some(&last_avg) = averages.last() {
+                    averages.push(last_avg);
+                } else {
+                    // Don't add zeros for missing data at the beginning
+                    continue;
                 }
             }
         }
 
-        // Build averages, then forward-fill
-        let mut out = vec![f64::NAN; buckets];
-        for i in 0..buckets {
-            if counts[i] > 0 {
-                out[i] = sums[i] / counts[i] as f64;
-            } else if i > 0 {
-                out[i] = out[i - 1]; // forward-fill
-            }
-        }
-        Ok(out)
+        // Reverse to get most recent first
+        averages.reverse();
+        Ok(averages)
     }
 
-    /// Convenience: last `minutes` buckets ending at now.
-    pub fn last_minutes_avg_fill(&self, from: SystemTime) -> Vec<f64> {
-        let to = SystemTime::now();
-        if (to < from) {
-            return Vec::new();
+    pub fn read_sample(&self, from: SystemTime, duration: Duration) -> Result<Sample, StorageError> {
+        let to = from + duration;
+        let samples = self.get_samples_in_range(from, to)?;
+        
+        if let Some(sample) = samples.first() {
+            Ok((*sample).clone())
+        } else {
+            Err(StorageError::NoDataAvailable)
         }
-        if let Ok(res) = self.per_minute_avg_fill(from, to) {
-            return res;
-        }
-        return Vec::new();
     }
 
+    pub fn len(&self) -> usize {
+        self.samples.len()
+    }
 
-    pub fn sample(&self, spec: SampleSpec) -> Sample {
-        match spec {
-            SampleSpec::Time(t) => {
-                let Some(start) = self.measurements.front() else {
-                    return Sample::create_empty();
-                };
-                return Sample {
-                    temp: self.last_minutes_avg_fill(SystemTime::now() - t)
-                }
-            }
-        }
+    pub fn is_empty(&self) -> bool {
+        self.samples.is_empty()
+    }
 
+    pub fn latest_sample(&self) -> Option<&Sample> {
+        self.samples.back()
+    }
 
-        return Sample::create_empty();
+    pub fn oldest_sample(&self) -> Option<&Sample> {
+        self.samples.front()
     }
 }
