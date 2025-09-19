@@ -24,8 +24,9 @@ struct TempsQuery {
 
 #[derive(Serialize)]
 struct TempsResponse {
-    temperatures: Vec<f64>,
-    latest_time: u64,
+    temperatures: Vec<Option<f64>>,
+    latest_time: Option<u64>,
+    oldest_time: Option<u64>,
     interval_minutes: u64,
     count: usize,
 }
@@ -66,12 +67,23 @@ async fn temps(
             StorageError::NoDataAvailable => AppError::InternalError("No data available for the requested time range".to_string()),
         })?;
     
-    let response = TempsResponse {
-        count: temperatures.len(),
-        latest_time: now
+    // Get the timestamps of the latest and oldest actual measurements
+    let latest_time = storage.latest_sample()
+        .map(|sample| sample.timestamp
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
-            .as_secs(),
+            .as_secs());
+    
+    let oldest_time = storage.oldest_sample()
+        .map(|sample| sample.timestamp
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs());
+    
+    let response = TempsResponse {
+        count: temperatures.len(),
+        latest_time,
+        oldest_time,
         interval_minutes: 1,
         temperatures,
     };

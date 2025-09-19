@@ -68,22 +68,40 @@ impl Storage {
         Ok(samples)
     }
 
-    pub fn per_minute_avg_fill(&self, from: SystemTime, to: SystemTime) -> Result<Vec<f64>, StorageError> {
+    pub fn per_minute_avg_fill(&self, from: SystemTime, to: SystemTime) -> Result<Vec<Option<f64>>, StorageError> {
         if from > to {
             return Err(StorageError::InvalidTimeRange);
         }
 
         let samples = self.get_samples_in_range(from, to)?;
-        let mut averages = Vec::new();
+        if samples.is_empty() {
+            return Ok(Vec::new());
+        }
         
-        let duration_secs = to.duration_since(from)
+        // Find the actual time range of our data
+        let first_sample_time = samples.iter().map(|s| s.timestamp).min().unwrap();
+        let last_sample_time = samples.iter().map(|s| s.timestamp).max().unwrap();
+        
+        // Start from the minute containing the first sample
+        let start_minute = first_sample_time.duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default().as_secs() / 60 * 60;
+        let start_time = SystemTime::UNIX_EPOCH + Duration::from_secs(start_minute);
+        
+        // End at the minute containing the last sample or 'to', whichever is earlier
+        let end_time = std::cmp::min(last_sample_time, to);
+        let end_minute = end_time.duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default().as_secs() / 60 * 60;
+        let actual_end_time = SystemTime::UNIX_EPOCH + Duration::from_secs(end_minute);
+        
+        let duration_secs = actual_end_time.duration_since(start_time)
             .map_err(|_| StorageError::InvalidTimeRange)?
             .as_secs();
         
         let minutes = (duration_secs / 60) + 1;
+        let mut averages = Vec::new();
         
         for minute in 0..minutes {
-            let minute_start = from + Duration::from_secs(minute * 60);
+            let minute_start = start_time + Duration::from_secs(minute * 60);
             let minute_end = minute_start + Duration::from_secs(60);
             
             let minute_samples: Vec<&Sample> = samples
@@ -97,15 +115,10 @@ impl Storage {
                     .iter()
                     .map(|s| s.temperature)
                     .sum::<f64>() / minute_samples.len() as f64;
-                averages.push(avg);
+                averages.push(Some(avg));
             } else {
-                // Use interpolation or previous value for missing data points
-                if let Some(&last_avg) = averages.last() {
-                    averages.push(last_avg);
-                } else {
-                    // Don't add zeros for missing data at the beginning
-                    continue;
-                }
+                // Add null for missing measurements within the data range
+                averages.push(None);
             }
         }
 

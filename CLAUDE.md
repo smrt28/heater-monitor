@@ -52,18 +52,20 @@ Returns temperature measurements as per-minute averages.
 **Response Format:**
 ```json
 {
-  "temperatures": [25.39, 25.39, 24.8, 24.2],
+  "temperatures": [25.39, null, 24.8, 24.2],
   "latest_time": 1758294793,
+  "oldest_time": 1758294553,
   "interval_minutes": 1,
   "count": 4
 }
 ```
 
 **Response Fields:**
-- `temperatures` - Array of temperature values (°C), most recent first
-- `latest_time` - Unix timestamp of the most recent measurement
+- `temperatures` - Array of temperature values (°C), most recent first. `null` values indicate missing measurements
+- `latest_time` - Unix timestamp of the most recent actual measurement (can be `null` if no measurements exist)
+- `oldest_time` - Unix timestamp of the oldest measurement in the response (can be `null` if no measurements exist)
 - `interval_minutes` - Time interval between measurements (always 1)
-- `count` - Number of temperature values returned
+- `count` - Number of time slots returned (including nulls)
 
 **Examples:**
 - `/temps` - Last 3 hours (180 values)
@@ -73,8 +75,9 @@ Returns temperature measurements as per-minute averages.
 **Data Characteristics:**
 - One temperature value per minute (averaged from 15-second samples)
 - Reverse chronological order (index 0 = most recent)
-- No zero-padding for missing data
-- Only includes time periods where measurements exist
+- `null` values represent minutes where thermometer was unavailable
+- No leading/trailing nulls - only covers the actual data time range
+- Returns empty array if no measurements exist in the requested period
 
 ### Error Handling
 
