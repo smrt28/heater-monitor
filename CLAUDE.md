@@ -125,6 +125,49 @@ The server configuration is handled in `src/config.rs` and includes:
 - Port configuration for HTTP server
 - Other application settings
 
+## Testing
+
+The storage module includes comprehensive unit tests covering:
+
+### Core Functionality
+- Storage creation and basic operations
+- Adding measurements with automatic timestamps
+- Capacity limits and memory management
+- Sample retrieval and ordering
+
+### Range Queries  
+- Valid and invalid time ranges
+- Empty storage handling
+- Samples within specified time periods
+
+### Per-Minute Aggregation
+- Average calculation with controlled timestamps
+- Gap handling (null values for missing measurements)
+- Reverse chronological ordering
+- Edge cases and error conditions
+
+### Run Tests
+```bash
+# Run storage tests specifically
+cargo test --test storage_tests --features test-helpers
+
+# Run all tests
+cargo test --features test-helpers
+```
+
+**Test Structure:**
+- Tests are in separate files following Rust best practices
+- Integration tests in `tests/storage_tests.rs`
+- Helper methods available via `test-helpers` feature
+- Clean separation between library and test code
+
+**Test Coverage:**
+- 14 comprehensive test cases
+- Edge case validation  
+- Error condition handling
+- Mock data with controlled timestamps
+- Performance scenarios
+
 ## Dependencies
 
 Key dependencies include:

@@ -10,7 +10,7 @@ pub struct Sample {
 
 #[derive(Debug)]
 pub struct Storage {
-    samples: VecDeque<Sample>,
+    pub(crate) samples: VecDeque<Sample>,
     max_capacity: Option<usize>,
 }
 
@@ -152,5 +152,11 @@ impl Storage {
 
     pub fn oldest_sample(&self) -> Option<&Sample> {
         self.samples.front()
+    }
+
+    // Helper method for testing - only available when testing
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn add_sample_direct(&mut self, sample: Sample) {
+        self.samples.push_back(sample);
     }
 }

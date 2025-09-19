@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 use serde::Deserialize;
-use crate::temp_sensor::TempSensor;
+// use crate::temp_sensor::TempSensor;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
