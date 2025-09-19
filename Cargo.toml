@@ -1,14 +1,14 @@
 [package]
-name = "synology"
+name = "heat_monitor"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "synology"
+name = "heat_monitor"
 path = "src/lib.rs"
 
 [[bin]]
-name = "synology"
+name = "heat_monitor"
 path = "src/main.rs"
 
 [features]

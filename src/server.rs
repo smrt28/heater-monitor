@@ -11,7 +11,6 @@ use axum::{routing::{get}, extract::{State, Query, Path}, Router, Json};
 use axum::response::{Html, Response};
 use axum::http::{StatusCode, header};
 // use axum::serve;
-use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
 #[derive(Clone)]
@@ -45,8 +44,8 @@ pub async fn run_server(
         .with_state(state);
 
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], config.port));
-    let listener = TcpListener::bind(addr).await?;
+    let addr = format!("{}:{}", config.listen_address, config.port);
+    let listener = TcpListener::bind(&addr).await?;
 
     axum::serve(listener, app)
         .await

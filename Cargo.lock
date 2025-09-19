@@ -463,6 +463,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
 
 [[package]]
+name = "heat_monitor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "clap",
+ "daemonize",
+ "env_logger",
+ "log",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_toml",
+ "thiserror",
+ "tokio",
+ "toml",
+ "uuid",
+]
+
+[[package]]
 name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1334,27 +1355,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
 dependencies = [
  "futures-core",
-]
-
-[[package]]
-name = "synology"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "clap",
- "daemonize",
- "env_logger",
- "log",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "serde_toml",
- "thiserror",
- "tokio",
- "toml",
- "uuid",
 ]
 
 [[package]]

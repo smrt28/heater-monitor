@@ -10,6 +10,7 @@ pub struct Config {
     pub max_capacity: usize,
     pub interval: u64,
     pub port: u16,
+    pub listen_address: String,
 }
 
 impl Config {

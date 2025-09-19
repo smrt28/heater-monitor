@@ -1,4 +1,4 @@
-use synology::storage::{Sample, Storage, StorageError};
+use heat_monitor::storage::{Sample, Storage, StorageError};
 use std::time::{Duration, SystemTime};
 
 fn create_test_storage() -> Storage {
