@@ -203,11 +203,13 @@ cargo test --features test-helpers
 - Clean separation between library and test code
 
 **Test Coverage:**
-- 14 comprehensive test cases
+- 19 comprehensive test cases
 - Edge case validation  
 - Error condition handling
 - Mock data with controlled timestamps
 - Performance scenarios
+- Memory management and capacity limits
+- Zero and single-capacity edge cases
 
 ## Dependencies
 

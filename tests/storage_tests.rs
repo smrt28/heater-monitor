@@ -254,3 +254,98 @@ fn test_storage_ordering() {
     assert_eq!(latest.temperature, 22.0);
     assert!(latest.timestamp >= oldest.timestamp);
 }
+
+#[test]
+fn test_max_capacity_enforcement() {
+    let mut storage = create_test_storage_with_capacity(3);
+    
+    // Add measurements up to capacity
+    storage.add_measurement(10.0, 30.0);
+    storage.add_measurement(15.0, 35.0);
+    storage.add_measurement(20.0, 40.0);
+    
+    assert_eq!(storage.len(), 3);
+    assert_eq!(storage.oldest_sample().unwrap().temperature, 10.0);
+    assert_eq!(storage.latest_sample().unwrap().temperature, 20.0);
+    
+    // Add one more - should evict the oldest
+    storage.add_measurement(25.0, 45.0);
+    
+    assert_eq!(storage.len(), 3); // Still at capacity
+    assert_eq!(storage.oldest_sample().unwrap().temperature, 15.0); // 10.0 was evicted
+    assert_eq!(storage.latest_sample().unwrap().temperature, 25.0); // New sample added
+    
+    // Add several more to test multiple evictions
+    storage.add_measurement(30.0, 50.0);
+    storage.add_measurement(35.0, 55.0);
+    
+    assert_eq!(storage.len(), 3);
+    assert_eq!(storage.oldest_sample().unwrap().temperature, 25.0); // 15.0 and 20.0 evicted
+    assert_eq!(storage.latest_sample().unwrap().temperature, 35.0);
+}
+
+#[test]
+fn test_max_capacity_zero() {
+    let mut storage = create_test_storage_with_capacity(0);
+    
+    // Adding to zero capacity should not store anything
+    storage.add_measurement(20.0, 40.0);
+    
+    assert_eq!(storage.len(), 0);
+    assert!(storage.is_empty());
+    assert!(storage.latest_sample().is_none());
+    assert!(storage.oldest_sample().is_none());
+}
+
+#[test]
+fn test_max_capacity_one() {
+    let mut storage = create_test_storage_with_capacity(1);
+    
+    // Add first measurement
+    storage.add_measurement(20.0, 40.0);
+    assert_eq!(storage.len(), 1);
+    assert_eq!(storage.latest_sample().unwrap().temperature, 20.0);
+    
+    // Add second measurement - should replace the first
+    storage.add_measurement(25.0, 45.0);
+    assert_eq!(storage.len(), 1);
+    assert_eq!(storage.latest_sample().unwrap().temperature, 25.0);
+    assert_eq!(storage.oldest_sample().unwrap().temperature, 25.0);
+}
+
+#[test]
+fn test_unlimited_capacity() {
+    let mut storage = create_test_storage(); // No capacity limit
+    
+    // Add many measurements
+    for i in 0..1000 {
+        storage.add_measurement(i as f64, (i * 2) as f64);
+    }
+    
+    assert_eq!(storage.len(), 1000);
+    assert_eq!(storage.oldest_sample().unwrap().temperature, 0.0);
+    assert_eq!(storage.latest_sample().unwrap().temperature, 999.0);
+}
+
+#[test]
+fn test_capacity_with_range_queries() {
+    let mut storage = create_test_storage_with_capacity(5);
+    
+    // Add measurements that will exceed capacity
+    for i in 0..10 {
+        storage.add_measurement(i as f64, (i * 2) as f64);
+        std::thread::sleep(Duration::from_millis(1)); // Ensure different timestamps
+    }
+    
+    // Should only have the last 5 measurements
+    assert_eq!(storage.len(), 5);
+    assert_eq!(storage.oldest_sample().unwrap().temperature, 5.0);
+    assert_eq!(storage.latest_sample().unwrap().temperature, 9.0);
+    
+    // Range queries should work correctly with capacity-limited data
+    let now = SystemTime::now();
+    let minute_ago = now - Duration::from_secs(60);
+    
+    let samples = storage.get_samples_in_range(minute_ago, now).unwrap();
+    assert_eq!(samples.len(), 5); // All remaining samples should be within range
+}

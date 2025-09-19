@@ -43,6 +43,10 @@ impl Storage {
         };
 
         if let Some(capacity) = self.max_capacity {
+            if capacity == 0 {
+                // Don't store anything if capacity is zero
+                return;
+            }
             if self.samples.len() >= capacity {
                 self.samples.pop_front();
             }
