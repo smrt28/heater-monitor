@@ -6,6 +6,7 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub temp_sensor_url: String,
+    #[allow(dead_code)]
     pub max_measurements: usize,
     pub interval: u64,
     pub port: u16,

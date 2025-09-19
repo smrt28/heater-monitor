@@ -5,6 +5,7 @@ use std::collections::VecDeque;
 pub struct Sample {
     pub timestamp: SystemTime,
     pub temperature: f64,
+    #[allow(dead_code)]
     pub humidity: f64,
 }
 
@@ -28,6 +29,7 @@ impl Storage {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_capacity(max_capacity: usize) -> Self {
         Self {
             samples: VecDeque::with_capacity(max_capacity),
@@ -131,6 +133,7 @@ impl Storage {
         Ok(averages)
     }
 
+    #[allow(dead_code)]
     pub fn read_sample(&self, from: SystemTime, duration: Duration) -> Result<Sample, StorageError> {
         let to = from + duration;
         let samples = self.get_samples_in_range(from, to)?;
@@ -142,10 +145,12 @@ impl Storage {
         }
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.samples.len()
     }
 
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.samples.is_empty()
     }
@@ -160,6 +165,7 @@ impl Storage {
 
     // Helper method for testing - only available when testing
     #[cfg(any(test, feature = "test-helpers"))]
+    #[allow(dead_code)]
     pub fn add_sample_direct(&mut self, sample: Sample) {
         self.samples.push_back(sample);
     }

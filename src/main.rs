@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use crate::config::Config;
 use anyhow::Result;
 use log::error;
-use regex::Regex;
+// use regex::Regex;
 use crate::server::run_server;
 use crate::temp_sensor::TempSensor;
 use crate::storage::Storage;
@@ -49,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let temp_sensor = TempSensor::new(&config.temp_sensor_url);
         let interval = config.interval;
         let storage = storage.clone();
-        let handle = tokio::spawn(async move {
+        let _handle = tokio::spawn(async move {
             loop {
                 if let Ok(val) = temp_sensor.query().await {
                     println!("{}", val);
@@ -65,6 +65,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
-    let res = run_server(storage, &config).await?;
+    let _res = run_server(storage, &config).await?;
     Ok(())
 }

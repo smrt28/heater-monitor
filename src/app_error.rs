@@ -3,7 +3,7 @@ use axum::Json;
 use axum::response::{IntoResponse, Response};
 use log::{info};
 use uuid::Uuid;
-use crate::storage::Storage;
+// use crate::storage::Storage;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
@@ -23,6 +23,7 @@ pub enum AppError {
     TryFromIntError(#[from] std::num::TryFromIntError),
 
     #[error("generate error: {0}")]
+    #[allow(dead_code)]
     GenerateError(String),
 
     #[error("io error: {0}")]
