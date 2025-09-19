@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temperature Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .time-buttons {
+            display: inline-flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .time-btn {
+            padding: 8px 16px;
+            border: 2px solid #007bff;
+            background: white;
+            color: #007bff;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        .time-btn:hover {
+            background: #007bff;
+            color: white;
+        }
+        .time-btn.active {
+            background: #007bff;
+            color: white;
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin: 20px 0;
+        }
+        .status {
+            text-align: center;
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .status.loading {
+            background-color: #e7f3ff;
+            color: #0066cc;
+        }
+        .status.error {
+            background-color: #ffe7e7;
+            color: #cc0000;
+        }
+        .status.success {
+            background-color: #e7ffe7;
+            color: #006600;
+        }
+        .info {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+        .refresh-btn {
+            padding: 8px 16px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        .refresh-btn:hover {
+            background: #218838;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌡️ Temperature Monitor</h1>
+        
+        <div class="controls">
+            <div class="time-buttons">
+                <button class="time-btn" data-hours="1">Last Hour</button>
+                <button class="time-btn active" data-hours="3">Last 3 Hours</button>
+                <button class="time-btn" data-hours="5">Last 5 Hours</button>
+            </div>
+            <button class="refresh-btn" onclick="refreshData()">🔄 Refresh</button>
+        </div>
+
+        <div class="status" id="status">Loading temperature data...</div>
+
+        <div class="chart-container">
+            <canvas id="tempChart"></canvas>
+        </div>
+
+        <div class="info">
+            <span id="dataInfo">No data</span>
+            <span id="lastUpdate">Never updated</span>
+        </div>
+    </div>
+
+    <script>
+        let chart = null;
+        let currentHours = 3;
+
+        // Initialize Chart.js
+        function initChart() {
+            try {
+                const ctx = document.getElementById('tempChart').getContext('2d');
+                chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Temperature (°C)',
+                            data: [],
+                            borderColor: '#ff6b6b',
+                            backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 0,
+                            pointHoverRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: {
+                                    displayFormats: {
+                                        minute: 'HH:mm',
+                                        hour: 'HH:mm'
+                                    }
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Time'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Temperature (°C)'
+                                },
+                                beginAtZero: false
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                callbacks: {
+                                    label: function(context) {
+                                        if (context.parsed.y === null) {
+                                            return 'Temperature: No data';
+                                        }
+                                        return `Temperature: ${context.parsed.y.toFixed(1)}°C`;
+                                    }
+                                }
+                            }
+                        },
+                        interaction: {
+                            mode: 'nearest',
+                            axis: 'x',
+                            intersect: false
+                        }
+                    }
+                });
+                console.log('Chart initialized successfully');
+            } catch (error) {
+                console.error('Failed to initialize chart:', error);
+                setStatus('Failed to initialize chart', 'error');
+            }
+        }
+
+        // Set status message
+        function setStatus(message, type = 'loading') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+
+        // Update data info
+        function updateInfo(count, latestTime, oldestTime) {
+            const dataInfo = document.getElementById('dataInfo');
+            const lastUpdate = document.getElementById('lastUpdate');
+            
+            dataInfo.textContent = `${count} data points`;
+            lastUpdate.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+        }
+
+        // Fetch temperature data
+        async function fetchTemperatureData(hours) {
+            try {
+                setStatus('Loading temperature data...', 'loading');
+                
+                const response = await fetch(`/temps?hours=${hours}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                setStatus(`Error loading data: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        // Update chart with new data
+        function updateChart(data) {
+            if (!chart) {
+                setStatus('Chart not initialized', 'error');
+                return;
+            }
+
+            if (!data.temperatures || data.temperatures.length === 0) {
+                setStatus('No temperature data available', 'error');
+                // Clear chart data
+                chart.data.labels = [];
+                chart.data.datasets[0].data = [];
+                chart.update();
+                return;
+            }
+
+            // Create labels - work backwards from latest_time
+            const labels = [];
+            const temps = [];
+            
+            if (data.latest_time) {
+                const latestTime = new Date(data.latest_time * 1000);
+                
+                for (let i = 0; i < data.temperatures.length; i++) {
+                    // Each index represents 1 minute earlier
+                    const time = new Date(latestTime.getTime() - (i * 60 * 1000));
+                    labels.unshift(time); // Add to beginning since we're going backwards
+                    temps.unshift(data.temperatures[i]); // Add to beginning
+                }
+            } else {
+                // Fallback: create labels based on array index if no latest_time
+                const now = new Date();
+                for (let i = 0; i < data.temperatures.length; i++) {
+                    const time = new Date(now.getTime() - (i * 60 * 1000));
+                    labels.unshift(time);
+                    temps.unshift(data.temperatures[i]);
+                }
+            }
+
+            // Update chart data
+            chart.data.labels = labels;
+            chart.data.datasets[0].data = temps;
+            chart.update();
+
+            // Update info
+            const validTemps = data.temperatures.filter(t => t !== null);
+            setStatus(`Displaying ${validTemps.length} temperature readings`, 'success');
+            updateInfo(data.count, data.latest_time, data.oldest_time);
+        }
+
+        // Refresh data
+        async function refreshData() {
+            try {
+                console.log(`Fetching temperature data for ${currentHours} hours`);
+                const data = await fetchTemperatureData(currentHours);
+                console.log('Received data:', data);
+                updateChart(data);
+            } catch (error) {
+                console.error('Failed to refresh data:', error);
+                setStatus(`Failed to refresh: ${error.message}`, 'error');
+            }
+        }
+
+        // Handle time button clicks
+        function setupTimeButtons() {
+            const buttons = document.querySelectorAll('.time-btn');
+            buttons.forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    // Update active button
+                    buttons.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    // Update current hours and refresh
+                    currentHours = parseInt(btn.dataset.hours);
+                    await refreshData();
+                });
+            });
+        }
+
+        // Handle URL parameters
+        function handleUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const hours = urlParams.get('hours');
+            
+            if (hours && ['1', '3', '5'].includes(hours)) {
+                currentHours = parseInt(hours);
+                
+                // Update active button
+                document.querySelectorAll('.time-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.dataset.hours === hours) {
+                        btn.classList.add('active');
+                    }
+                });
+            }
+        }
+
+        // Initialize everything
+        document.addEventListener('DOMContentLoaded', async () => {
+            initChart();
+            setupTimeButtons();
+            handleUrlParams();
+            
+            // Load initial data
+            await refreshData();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(refreshData, 30000);
+        });
+    </script>
+</body>
+</html>

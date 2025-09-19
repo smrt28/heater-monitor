@@ -8,6 +8,7 @@ use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
 use axum::{routing::{get}, extract::{State, Query}, Router, Json};
+use axum::response::Html;
 use axum::serve;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -36,6 +37,7 @@ pub async fn run_server(
     config: &Config) -> Result<(), AppError> {
     let state = AppState { storage };
     let app = Router::new()
+        .route("/", get(index))
         .route("/temps", get(temps))
         .fallback(get(fallback))
         .with_state(state);
@@ -50,7 +52,9 @@ pub async fn run_server(
     Ok(())
 }
 
-
+async fn index() -> Html<&'static str> {
+    Html(include_str!("../assets/index.html"))
+}
 
 async fn temps(
     State(state): State<AppState>,

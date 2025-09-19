@@ -42,9 +42,24 @@ Provides REST API access to temperature data using Axum framework.
 
 #### Endpoints
 
+##### GET `/`
+
+Serves the main web interface - an interactive temperature monitoring dashboard.
+
+**Features:**
+- **Real-time Chart**: Line graph showing temperature over time using Chart.js
+- **Time Range Controls**: Buttons for 1, 3, and 5-hour views  
+- **Auto-refresh**: Updates chart every 30 seconds automatically
+- **URL Parameters**: Supports `?hours=X` query parameter (1, 3, or 5)
+- **Responsive Design**: Clean, modern interface that works on all devices
+- **Gap Handling**: Displays null values as gaps in the chart for sensor outages
+- **Loading States**: Shows loading and error messages appropriately
+
+**Static Assets**: HTML, CSS, and JavaScript are embedded in the binary using `include_str!()` from the `assets/` directory.
+
 ##### GET `/temps`
 
-Returns temperature measurements as per-minute averages.
+Returns temperature measurements as per-minute averages (JSON API).
 
 **Query Parameters:**
 - `hours` (optional) - Number of hours to retrieve (default: 3)
@@ -104,12 +119,24 @@ let one_hour_ago = now - Duration::from_secs(3600);
 let samples = storage.get_samples_in_range(one_hour_ago, now)?;
 ```
 
-### HTTP API Usage
+### Usage Examples
+
+#### Web Interface
 ```bash
-# Get last 3 hours
+# Open main dashboard (defaults to 3 hours)
+http://localhost:8080/
+
+# Open with specific time range
+http://localhost:8080/?hours=1
+http://localhost:8080/?hours=5
+```
+
+#### HTTP API Usage
+```bash
+# Get last 3 hours (JSON)
 curl http://localhost:8080/temps
 
-# Get last 8 hours  
+# Get last 8 hours (JSON)
 curl http://localhost:8080/temps?hours=8
 
 # Response interpretation:
