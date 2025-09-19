@@ -7,8 +7,9 @@ use crate::storage::{Sample, Storage, StorageError};
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
-use axum::{routing::{get}, extract::{State, Query}, Router, Json};
-use axum::response::Html;
+use axum::{routing::{get}, extract::{State, Query, Path}, Router, Json};
+use axum::response::{Html, Response};
+use axum::http::{StatusCode, header};
 use axum::serve;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -39,6 +40,7 @@ pub async fn run_server(
     let app = Router::new()
         .route("/", get(index))
         .route("/temps", get(temps))
+        .route("/assets/*file", get(serve_asset))
         .fallback(get(fallback))
         .with_state(state);
 
@@ -54,6 +56,20 @@ pub async fn run_server(
 
 async fn index() -> Html<&'static str> {
     Html(include_str!("../assets/index.html"))
+}
+
+async fn serve_asset(Path(file): Path<String>) -> Result<Response, StatusCode> {
+    match file.as_str() {
+        "chartjs-adapter-date-fns.bundle.min.js" => {
+            let content = include_str!("../assets/chartjs-adapter-date-fns.bundle.min.js");
+            Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "application/javascript")
+                .body(content.into())
+                .unwrap())
+        }
+        _ => Err(StatusCode::NOT_FOUND)
+    }
 }
 
 async fn temps(

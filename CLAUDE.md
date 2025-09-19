@@ -55,7 +55,19 @@ Serves the main web interface - an interactive temperature monitoring dashboard.
 - **Gap Handling**: Displays null values as gaps in the chart for sensor outages
 - **Loading States**: Shows loading and error messages appropriately
 
-**Static Assets**: HTML, CSS, and JavaScript are embedded in the binary using `include_str!()` from the `assets/` directory.
+**Static Assets**: 
+- HTML, CSS, and JavaScript are embedded in the binary using `include_str!()`
+- Local Chart.js adapter served from `/assets/` route for offline operation
+- Only main Chart.js library loaded from CDN (could be localized if needed)
+
+##### GET `/assets/*file`
+
+Serves static assets embedded in the binary for offline operation.
+
+**Supported Files:**
+- `chartjs-adapter-date-fns.bundle.min.js` - Chart.js time adapter for date/time axis support
+
+**Content-Type**: Automatically set based on file type (e.g., `application/javascript`)
 
 ##### GET `/temps`
 
