@@ -3,8 +3,8 @@ use std::collections::VecDeque;
 use crate::app_error::AppError;
 use crate::config::Config;
 use std::fs::File;
-use std::io::Write;
-use log::info;
+use std::io::{BufRead, BufReader, Write};
+use log::{error, info};
 
 
 #[derive(Debug, Clone)]
@@ -54,6 +54,7 @@ pub struct Storage {
     pub(crate) samples: VecDeque<Sample>,
     max_capacity: Option<usize>,
     file_store: Option<File>,
+    last_sample_time: Option<SystemTime>,
 }
 
 #[derive(Debug)]
@@ -63,8 +64,40 @@ pub enum StorageError {
 }
 
 impl Storage {
+    fn read_samples_from_file(&mut self, file_path: &str) -> Result<(), AppError> {
+        let file = File::open(file_path)?;
+        let reader = BufReader::new(file);
+
+        for line in reader.lines() {
+            let mut line = line?;
+            if let Ok(sample) = Sample::deserialize(&line) {
+                self.push_raw_sample(sample);
+            } else {
+                line.truncate(100);
+                error!("Failed to parse sample from file: {}", &line);
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn new(config: &Config) -> Result<Self, AppError> {
-        let fd = if let Some(file_path) = &config.file_storage {
+        let mut rv = Self {
+            samples: VecDeque::new(),
+            max_capacity: Some(config.max_capacity),
+            file_store: None,
+            last_sample_time: None,
+        };
+
+        if let Some(file_path) = &config.file_storage {
+            if !rv.read_samples_from_file(file_path).is_ok() {
+                info!("Failed to read samples from file");
+            };
+        }
+
+        info!("Storage initialized by {}", rv.samples.len());
+
+        rv.file_store = if let Some(file_path) = &config.file_storage {
             Some(File::options()
                 .create(true)
                 .append(true)
@@ -73,20 +106,19 @@ impl Storage {
             None
         };
 
-        Ok(Self {
-            samples: VecDeque::new(),
-            max_capacity: Some(config.max_capacity),
-            file_store: fd,
-        })
+        Ok(rv)
     }
 
-    pub fn add_measurement(&mut self, temp: f64, _hum: f64) {
-        let sample = Sample {
-            timestamp: SystemTime::now(),
-            temperature: temp,
-         //   humidity: hum,
-        };
 
+    pub fn push_raw_sample(&mut self, sample: Sample) {
+        if let Some(last_sample_time) = self.last_sample_time {
+            if last_sample_time > sample.timestamp {
+                error!("Sample timestamp is in the past");
+                return;
+            }
+        }
+
+        self.last_sample_time = Some(sample.timestamp);
         if let Some(capacity) = self.max_capacity {
             if capacity == 0 {
                 // Don't store anything if capacity is zero
@@ -96,7 +128,15 @@ impl Storage {
                 self.samples.pop_front();
             }
         }
+        self.samples.push_back(sample);
+    }
 
+    pub fn add_measurement(&mut self, temp: f64, _hum: f64) {
+        let sample = Sample {
+            timestamp: SystemTime::now(),
+            temperature: temp,
+         //   humidity: hum,
+        };
 
         if let Some(file_store) = &mut self.file_store {
             if let Ok(mut s) = sample.serialize() {
@@ -107,7 +147,7 @@ impl Storage {
             }
         }
 
-        self.samples.push_back(sample);
+        self.push_raw_sample(sample);
     }
 
     pub fn get_samples_in_range(&self, from: SystemTime, to: SystemTime) -> Result<Vec<&Sample>, StorageError> {
