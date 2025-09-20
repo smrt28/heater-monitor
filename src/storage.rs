@@ -1,19 +1,59 @@
 use std::time::{Duration, SystemTime};
 use std::collections::VecDeque;
+use crate::app_error::AppError;
 use crate::config::Config;
+use std::fs::File;
+use std::io::Write;
+use log::info;
+
 
 #[derive(Debug, Clone)]
 pub struct Sample {
     pub timestamp: SystemTime,
     pub temperature: f64,
+ //   #[allow(dead_code)]
+ //   pub humidity: f64,
+}
+
+impl Sample {
+    fn serialize(&self) -> Result<String, AppError> {
+        Ok(format!("t1 {} {}",
+           self.timestamp.duration_since(SystemTime::UNIX_EPOCH)?.as_secs(),
+           self.temperature))
+    }
+
     #[allow(dead_code)]
-    pub humidity: f64,
+    fn deserialize(line: &str) -> Result<Sample, AppError> {
+        let parts: Vec<&str> = line.trim().split_whitespace().collect();
+
+        if parts.len() != 3 || parts[0] != "t1" {
+            return Err(AppError::ParseError(format!("Invalid sample format: {}", line)));
+        }
+
+        let timestamp_secs: u64 = parts[1].parse()
+            .map_err(|_| AppError::ParseError(format!("Invalid timestamp: {}", parts[1])))?;
+
+        let temperature: f64 = parts[2].parse()
+            .map_err(|_| AppError::ParseError(format!("Invalid temperature: {}", parts[2])))?;
+
+        if temperature > 1000.0 || temperature < -1000.0 {
+            return Err(AppError::ParseError(format!("Invalid temperature range: {}", temperature)));
+        }
+
+        let timestamp = SystemTime::UNIX_EPOCH + Duration::from_secs(timestamp_secs);
+
+        Ok(Sample {
+            timestamp,
+            temperature,
+        })
+    }
 }
 
 #[derive(Debug)]
 pub struct Storage {
     pub(crate) samples: VecDeque<Sample>,
     max_capacity: Option<usize>,
+    file_store: Option<File>,
 }
 
 #[derive(Debug)]
@@ -23,26 +63,28 @@ pub enum StorageError {
 }
 
 impl Storage {
-    pub fn new(config: &Config) -> Self {
-        Self {
+    pub fn new(config: &Config) -> Result<Self, AppError> {
+        let fd = if let Some(file_path) = &config.file_storage {
+            Some(File::options()
+                .create(true)
+                .append(true)
+                .open(file_path)?)
+        } else {
+            None
+        };
+
+        Ok(Self {
             samples: VecDeque::new(),
             max_capacity: Some(config.max_capacity),
-        }
+            file_store: fd,
+        })
     }
 
-    #[allow(dead_code)]
-    pub fn with_capacity(max_capacity: usize) -> Self {
-        Self {
-            samples: VecDeque::with_capacity(max_capacity),
-            max_capacity: Some(max_capacity),
-        }
-    }
-
-    pub fn add_measurement(&mut self, temp: f64, hum: f64) {
+    pub fn add_measurement(&mut self, temp: f64, _hum: f64) {
         let sample = Sample {
             timestamp: SystemTime::now(),
             temperature: temp,
-            humidity: hum,
+         //   humidity: hum,
         };
 
         if let Some(capacity) = self.max_capacity {
@@ -52,6 +94,16 @@ impl Storage {
             }
             if self.samples.len() >= capacity {
                 self.samples.pop_front();
+            }
+        }
+
+
+        if let Some(file_store) = &mut self.file_store {
+            if let Ok(mut s) = sample.serialize() {
+                s.push('\n');
+                if !file_store.write(s.as_bytes()).is_ok() {
+                    info!("Failed to write sample to file");
+                };
             }
         }
 

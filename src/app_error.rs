@@ -37,6 +37,9 @@ pub enum AppError {
 
     #[error("internal error: {0}")]
     InternalError(String),
+
+    #[error("parse error: {0}")]
+    ParseError(String),
 }
 
 impl IntoResponse for AppError {
@@ -57,6 +60,7 @@ impl IntoResponse for AppError {
             AppError::TemperatureSensorError(_)       => (StatusCode::INTERNAL_SERVER_ERROR,   9),
             AppError::InternalError(_)   => (StatusCode::INTERNAL_SERVER_ERROR, 10),
             AppError::TimeError(_)       => (StatusCode::INTERNAL_SERVER_ERROR, 11),
+            AppError::ParseError(_)      => (StatusCode::INTERNAL_SERVER_ERROR, 12),
 
         };
 

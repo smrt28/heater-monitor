@@ -12,6 +12,8 @@ pub struct Config {
     pub port: u16,
     pub listen_address: String,
     pub log_path: String,
+    #[allow(dead_code)]
+    pub file_storage: Option<String>,
 }
 
 impl Config {

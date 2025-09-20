@@ -36,7 +36,7 @@ struct Args {
 async fn run_app(config: Config) -> Result<(), Box<dyn std::error::Error>> {
 
     let storage = Arc::new(Mutex::new(
-        Storage::new(&config)
+        Storage::new(&config)?
     ));
     info!("Storage initialized");
 
