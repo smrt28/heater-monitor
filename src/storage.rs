@@ -4,7 +4,7 @@ use crate::app_error::AppError;
 use crate::config::Config;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
-use log::{error, info};
+use log::{debug, error, info, warn};
 
 
 #[derive(Debug, Clone)]
@@ -52,9 +52,9 @@ impl Sample {
 #[derive(Debug)]
 pub struct Storage {
     pub(crate) samples: VecDeque<Sample>,
-    max_capacity: Option<usize>,
     file_store: Option<File>,
     last_sample_time: Option<SystemTime>,
+    config: Config,
 }
 
 #[derive(Debug)]
@@ -84,12 +84,12 @@ impl Storage {
     pub fn new(config: &Config) -> Result<Self, AppError> {
         let mut rv = Self {
             samples: VecDeque::new(),
-            max_capacity: Some(config.max_capacity),
             file_store: None,
             last_sample_time: None,
+            config: config.clone(),
         };
 
-        if let Some(file_path) = &config.file_storage {
+        if let Some(file_path) = &config.backlog {
             if !rv.read_samples_from_file(file_path).is_ok() {
                 info!("Failed to read samples from file");
             };
@@ -97,7 +97,7 @@ impl Storage {
 
         info!("Storage initialized by {}", rv.samples.len());
 
-        rv.file_store = if let Some(file_path) = &config.file_storage {
+        rv.file_store = if let Some(file_path) = &config.backlog {
             Some(File::options()
                 .create(true)
                 .append(true)
@@ -119,7 +119,7 @@ impl Storage {
         }
 
         self.last_sample_time = Some(sample.timestamp);
-        if let Some(capacity) = self.max_capacity {
+        if let Some(capacity) = self.config.max_capacity {
             if capacity == 0 {
                 // Don't store anything if capacity is zero
                 return;
@@ -172,57 +172,55 @@ impl Storage {
             return Err(StorageError::InvalidTimeRange);
         }
 
+        debug!("per_minute_avg_fill from:{:?} to:{:?}", from, to);
+
         let samples = self.get_samples_in_range(from, to)?;
         if samples.is_empty() {
             return Ok(Vec::new());
         }
-        
-        // Find the actual time range of our data
-        let first_sample_time = samples.iter().map(|s| s.timestamp).min().unwrap();
-        let last_sample_time = samples.iter().map(|s| s.timestamp).max().unwrap();
-        
-        // Start from the minute containing the first sample
-        let start_minute = first_sample_time.duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default().as_secs() / 60 * 60;
-        let start_time = SystemTime::UNIX_EPOCH + Duration::from_secs(start_minute);
-        
-        // End at the minute containing the last sample or 'to', whichever is earlier
-        let end_time = std::cmp::min(last_sample_time, to);
-        let end_minute = end_time.duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default().as_secs() / 60 * 60;
-        let actual_end_time = SystemTime::UNIX_EPOCH + Duration::from_secs(end_minute);
-        
-        let duration_secs = actual_end_time.duration_since(start_time)
-            .map_err(|_| StorageError::InvalidTimeRange)?
-            .as_secs();
-        
-        let minutes = (duration_secs / 60) + 1;
-        let mut averages = Vec::new();
-        
-        for minute in 0..minutes {
-            let minute_start = start_time + Duration::from_secs(minute * 60);
-            let minute_end = minute_start + Duration::from_secs(60);
-            
-            let minute_samples: Vec<&Sample> = samples
-                .iter()
-                .filter(|sample| sample.timestamp >= minute_start && sample.timestamp < minute_end)
-                .cloned()
-                .collect();
-            
-            if !minute_samples.is_empty() {
-                let avg = minute_samples
-                    .iter()
-                    .map(|s| s.temperature)
-                    .sum::<f64>() / minute_samples.len() as f64;
-                averages.push(Some(avg));
-            } else {
-                // Add null for missing measurements within the data range
-                averages.push(None);
+
+        for(prev, curr) in samples.iter().zip(samples.iter().skip(1)) {
+            if prev.timestamp > curr.timestamp {
+                warn!("Sample timestamp is in the past");
+                return Err(StorageError::InvalidTimeRange);
             }
         }
 
-        // Reverse to get most recent first
-        averages.reverse();
+        let mut timestamp = samples.first().unwrap().timestamp;
+        let mut count = 0;
+        let mut sum:f64 = 0.0;
+        let mut it = samples.iter().peekable();
+        let mut previous_average: Option<f64> = None;
+        let mut averages = Vec::new();
+        let mut no_samples_count = 0;
+
+        let interval = Duration::from_secs(self.config.averaging_interval as u64);
+
+        while let Some(curr) = it.peek() {
+            if curr.timestamp < timestamp + interval {
+                sum += curr.temperature;
+                count += 1;
+                it.next();
+            } else {
+                if count > 0 {
+                    no_samples_count = 0;
+                    previous_average = Some(sum / count as f64);
+                } else {
+                    no_samples_count += 1;
+                }
+
+                timestamp = timestamp + interval;
+
+                if no_samples_count > 5 {
+                    previous_average = None;
+                }
+
+                averages.push(previous_average);
+                count = 0;
+                sum = 0.0;
+            }
+        }
+
         Ok(averages)
     }
 

@@ -42,9 +42,9 @@ async fn run_app(config: Config) -> Result<(), Box<dyn std::error::Error>> {
 
     {
         let temp_sensor = TempSensor::new(&config.temp_sensor_url);
-        let interval = config.interval;
+        let sampling_interval = config.sampling_interval;
         let storage = storage.clone();
-        info!("Starting temperature monitoring task with {}s interval", interval);
+        info!("Starting temperature monitoring task with {}s interval", sampling_interval);
         let _handle = tokio::spawn(async move {
             let mut cnt: usize = 0;
             loop {
@@ -64,7 +64,7 @@ async fn run_app(config: Config) -> Result<(), Box<dyn std::error::Error>> {
                 } else {
                     error!("failed to query temperature sensor");
                 }
-                tokio::time::sleep(std::time::Duration::from_secs(interval as u64)).await;
+                tokio::time::sleep(std::time::Duration::from_secs(sampling_interval as u64)).await;
             }
         });
     }

@@ -115,11 +115,12 @@
                 <div class="time-buttons">
                     <button class="time-btn" data-hours="1">1 Hour</button>
                     <button class="time-btn active" data-hours="3">3 Hours</button>
+                    <button class="time-btn" data-hours="5">5 Hours</button>
                 </div>
                 <div class="time-buttons">
-                    <button class="time-btn" data-hours="5">5 Hours</button>
                     <button class="time-btn" data-hours="12">12 Hours</button>
                     <button class="time-btn" data-hours="24">24 Hours</button>
+                    <button class="time-btn" data-hours="48">48 Hours</button>
                 </div>
             </div>
             <button class="refresh-btn" onclick="refreshData()">🔄 Refresh</button>
@@ -336,7 +337,7 @@
             const urlParams = new URLSearchParams(window.location.search);
             const hours = urlParams.get('hours');
             
-            if (hours && ['1', '3', '5', '12', '24'].includes(hours)) {
+            if (hours && ['1', '3', '5', '12', '24', '48'].includes(hours)) {
                 currentHours = parseInt(hours);
                 
                 // Update active button
