@@ -5,9 +5,9 @@ use crate::config::Config;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 use log::{debug, error, info, warn};
+use serde::Serialize;
 
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Sample {
     pub timestamp: SystemTime,
     pub temperature: f64,
@@ -55,6 +55,7 @@ pub struct Storage {
     file_store: Option<File>,
     last_sample_time: Option<SystemTime>,
     config: Config,
+    last: Option<Sample>,
 }
 
 #[derive(Debug)]
@@ -87,6 +88,7 @@ impl Storage {
             file_store: None,
             last_sample_time: None,
             config: config.clone(),
+            last: None,
         };
 
         if let Some(file_path) = &config.backlog {
@@ -128,7 +130,8 @@ impl Storage {
                 self.samples.pop_front();
             }
         }
-        self.samples.push_back(sample);
+        self.samples.push_back(sample.clone());
+        self.last = Some(sample);
     }
 
     pub fn add_measurement(&mut self, temp: f64, _hum: f64) {
@@ -193,35 +196,62 @@ impl Storage {
         let mut previous_average: Option<f64> = None;
         let mut averages = Vec::new();
         let mut no_samples_count = 0;
+        let mut fin = false;
 
         let interval = Duration::from_secs(self.config.averaging_interval as u64);
 
-        while let Some(curr) = it.peek() {
-            if curr.timestamp < timestamp + interval {
-                sum += curr.temperature;
-                count += 1;
-                it.next();
-            } else {
-                if count > 0 {
-                    no_samples_count = 0;
-                    previous_average = Some(sum / count as f64);
-                } else {
-                    no_samples_count += 1;
-                }
+        let mut loops = 0;
 
-                timestamp = timestamp + interval;
-
-                if no_samples_count > 5 {
-                    previous_average = None;
-                }
-
-                averages.push(previous_average);
-                count = 0;
-                sum = 0.0;
+        while !fin {
+            loops += 1;
+            if loops > 1000000 {
+                // prevent infinite loop and so OOM killer
+                error!("Looping forever");
+                panic!("Looping forever");
             }
+
+            match it.peek() {
+                Some(curr) => {
+                    if curr.timestamp < timestamp + interval {
+                        sum += curr.temperature;
+                        count += 1;
+                        it.next();
+                        continue;
+                    }
+                }
+                None => {
+                    fin = true;
+                }
+            };
+
+
+            if count > 0 {
+                no_samples_count = 0;
+                previous_average = Some(sum / count as f64);
+            } else {
+                no_samples_count += 1;
+            }
+
+            timestamp = timestamp + interval;
+
+            if no_samples_count > 5 {
+                previous_average = None;
+            }
+
+            averages.push(previous_average);
+            if averages.len() > 100000 {
+                error!("Too many entries in averages, something is wrong");
+                break;
+            }
+            count = 0;
+            sum = 0.0;
         }
 
         Ok(averages)
+    }
+
+    pub fn get_last_sample(&self) -> Option<&Sample> {
+        self.last.as_ref()
     }
 
     #[allow(dead_code)]

@@ -299,7 +299,7 @@
 
             // Update info
             const validTemps = data.temperatures.filter(t => t !== null);
-            setStatus(`Displaying ${validTemps.length} temperature readings`, 'success');
+            setStatus(`${data?.last_t} [${data?.last?.temperature}]: ${validTemps.length} temperature readings`, 'success');
             updateInfo(data.count, data.latest_time, data.oldest_time);
         }
 

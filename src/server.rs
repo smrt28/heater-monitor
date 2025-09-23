@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 use crate::config::Config;
 use crate::app_error::AppError;
-use crate::storage::{Storage, StorageError};
+use crate::storage::{Storage, StorageError, Sample};
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
@@ -12,6 +12,7 @@ use axum::response::{Html, Response};
 use axum::http::{StatusCode, header};
 // use axum::serve;
 use tokio::net::TcpListener;
+use chrono::{DateTime, Local};
 
 #[derive(Clone)]
 struct AppState {
@@ -30,6 +31,8 @@ struct TempsResponse {
     oldest_time: Option<u64>,
     interval_minutes: u64,
     count: usize,
+    last_t: Option<String>,
+    last: Option<Sample>,
 }
 
 pub async fn run_server(
@@ -85,6 +88,7 @@ async fn temps(
             StorageError::InvalidTimeRange => AppError::InternalError("Invalid time range".to_string()),
             StorageError::NoDataAvailable => AppError::InternalError("No data available for the requested time range".to_string()),
         })?;
+    let last_sample = storage.get_last_sample().cloned();
     
     // Get the timestamps of the latest and oldest actual measurements
     let latest_time = storage.latest_sample()
@@ -98,13 +102,23 @@ async fn temps(
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs());
-    
+
+
+
     let response = TempsResponse {
         count: temperatures.len(),
         latest_time,
         oldest_time,
         interval_minutes: 1,
         temperatures,
+        last: last_sample.clone(),
+        last_t: if let Some(last) = last_sample {
+            let datetime: DateTime<Local> = DateTime::from(last.timestamp);
+            Some(datetime.format("%Y-%m-%d %H:%M:%S").to_string())
+        } else {
+            None
+        }
+
     };
     
     Ok(Json(response))
