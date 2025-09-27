@@ -112,7 +112,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("Daemonizing...");
 
         let daemonize = Daemonize::new()
-            .pid_file("/tmp/heater-monitor.pid")
+            .pid_file(&config.pid_file)
             .chown_pid_file(true)
             .working_directory("/tmp")
             .umask(0o027)

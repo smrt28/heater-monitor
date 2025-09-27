@@ -9,3 +9,4 @@ averaging_interval = 120
 listen_address = "0.0.0.0"
 log_path = "/tmp/heat_monitor.log"
 backlog = "/tmp/heat_monitor.backlog"
+pid_file = "/tmp/heater-monitor.pid"

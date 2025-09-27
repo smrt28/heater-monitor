@@ -15,6 +15,7 @@ pub struct Config {
     #[allow(dead_code)]
     pub backlog: Option<String>,
     pub averaging_interval: u32,
+    pub pid_file: String,
 }
 
 impl Config {
